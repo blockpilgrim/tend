@@ -16,6 +16,11 @@
 			path = Tend;
 			sourceTree = "<group>";
 		};
+		60F0A5132F11288C003ED3F4 /* docs */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = docs;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -34,6 +39,7 @@
 			children = (
 				60F0A4F52F11172B003ED3F4 /* Tend */,
 				60F0A4F42F11172B003ED3F4 /* Products */,
+				60F0A5132F11288C003ED3F4 /* docs */,
 			);
 			sourceTree = "<group>";
 		};
@@ -62,6 +68,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				60F0A4F52F11172B003ED3F4 /* Tend */,
+				60F0A5132F11288C003ED3F4 /* docs */,
 			);
 			name = Tend;
 			packageProductDependencies = (
