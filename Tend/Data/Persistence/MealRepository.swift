@@ -8,7 +8,9 @@
 import Foundation
 import SwiftData
 
-final class MealRepository: MealRepositoryProtocol {
+/// @unchecked because ModelContext must be accessed from its creation thread.
+/// This repository should only be used from the main actor context.
+final class MealRepository: MealRepositoryProtocol, @unchecked Sendable {
 
     private let modelContext: ModelContext
 

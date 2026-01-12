@@ -9,10 +9,9 @@ import UIKit
 
 final class PhotoStorageService: PhotoStorageServiceProtocol {
 
-    private let fileManager = FileManager.default
-
     /// Directory where meal photos are stored
     private var photosDirectory: URL {
+        let fileManager = FileManager.default
         let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let photosURL = documentsURL.appendingPathComponent("MealPhotos", isDirectory: true)
 
@@ -52,6 +51,7 @@ final class PhotoStorageService: PhotoStorageServiceProtocol {
     }
 
     func delete(filename: String) async throws {
+        let fileManager = FileManager.default
         let fileURL = photosDirectory.appendingPathComponent(filename)
 
         guard fileManager.fileExists(atPath: fileURL.path) else {

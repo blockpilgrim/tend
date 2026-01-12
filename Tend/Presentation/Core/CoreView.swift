@@ -25,10 +25,10 @@ struct CoreView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // Core placeholder - will be replaced with SpriteKit scene
-                CorePlaceholderView(state: appState.coreState)
+                // Radiant Core SpriteKit scene
+                SpriteKitContainer(coreState: appState.coreState)
                     .frame(maxWidth: .infinity)
-                    .frame(height: UIScreen.main.bounds.height * 0.5)
+                    .frame(height: UIScreen.main.bounds.height * 0.6)
 
                 // Status text
                 Text(statusText)
