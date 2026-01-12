@@ -10,8 +10,19 @@
 		605F08F02F15179200C164C0 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 60F0A5152F114400003ED3F4 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		60F0A5172F15200000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 60F0A4EB2F11172B003ED3F4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 60F0A4F22F11172B003ED3F4;
+			remoteInfo = Tend;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		60F0A4F32F11172B003ED3F4 /* Tend.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tend.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		60F0A5182F15200000000002 /* TendTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TendTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -25,6 +36,11 @@
 			path = docs;
 			sourceTree = "<group>";
 		};
+		60F0A5192F15200000000003 /* TendTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TendTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -36,6 +52,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		60F0A51A2F15200000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -43,6 +66,7 @@
 			isa = PBXGroup;
 			children = (
 				60F0A4F52F11172B003ED3F4 /* Tend */,
+				60F0A5192F15200000000003 /* TendTests */,
 				60F0A4F42F11172B003ED3F4 /* Products */,
 				60F0A5132F11288C003ED3F4 /* docs */,
 			);
@@ -52,6 +76,7 @@
 			isa = PBXGroup;
 			children = (
 				60F0A4F32F11172B003ED3F4 /* Tend.app */,
+				60F0A5182F15200000000002 /* TendTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -83,6 +108,29 @@
 			productReference = 60F0A4F32F11172B003ED3F4 /* Tend.app */;
 			productType = "com.apple.product-type.application";
 		};
+		60F0A51B2F15200000000005 /* TendTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 60F0A51C2F15200000000006 /* Build configuration list for PBXNativeTarget "TendTests" */;
+			buildPhases = (
+				60F0A51D2F15200000000007 /* Sources */,
+				60F0A51A2F15200000000004 /* Frameworks */,
+				60F0A51E2F15200000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				60F0A51F2F15200000000009 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				60F0A5192F15200000000003 /* TendTests */,
+			);
+			name = TendTests;
+			packageProductDependencies = (
+			);
+			productName = TendTests;
+			productReference = 60F0A5182F15200000000002 /* TendTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -95,6 +143,10 @@
 				TargetAttributes = {
 					60F0A4F22F11172B003ED3F4 = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					60F0A51B2F15200000000005 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 60F0A4F22F11172B003ED3F4;
 					};
 				};
 			};
@@ -116,12 +168,20 @@
 			projectRoot = "";
 			targets = (
 				60F0A4F22F11172B003ED3F4 /* Tend */,
+				60F0A51B2F15200000000005 /* TendTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		60F0A4F12F11172B003ED3F4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		60F0A51E2F15200000000008 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -138,7 +198,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		60F0A51D2F15200000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		60F0A51F2F15200000000009 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 60F0A4F22F11172B003ED3F4 /* Tend */;
+			targetProxy = 60F0A5172F15200000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		60F0A4FE2F11172C003ED3F4 /* Debug */ = {
@@ -316,6 +391,44 @@
 			};
 			name = Release;
 		};
+		60F0A5202F1520000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WN854P48MS;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Block-365.TendTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tend.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tend";
+			};
+			name = Debug;
+		};
+		60F0A5212F1520000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WN854P48MS;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Block-365.TendTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tend.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tend";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -333,6 +446,15 @@
 			buildConfigurations = (
 				60F0A5012F11172C003ED3F4 /* Debug */,
 				60F0A5022F11172C003ED3F4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		60F0A51C2F15200000000006 /* Build configuration list for PBXNativeTarget "TendTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				60F0A5202F1520000000000A /* Debug */,
+				60F0A5212F1520000000000B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
