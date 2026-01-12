@@ -55,7 +55,7 @@ struct CoreView: View {
             }
         }
         .fullScreenCover(isPresented: $isShowingMealLogger) {
-            MealLoggingPlaceholder()
+            MealLoggingFlow()
         }
     }
 
