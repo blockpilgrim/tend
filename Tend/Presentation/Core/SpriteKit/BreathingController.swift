@@ -37,6 +37,12 @@ final class BreathingController {
     private var targetBrightnessRange: CGFloat = 0.12
     private var targetIrregularity: CGFloat = 0.0
 
+    // Store starting values for proper interpolation (fixes asymptotic lerp bug)
+    private var startCycleDuration: TimeInterval = 10.0
+    private var startScaleRange: CGFloat = 0.06
+    private var startBrightnessRange: CGFloat = 0.12
+    private var startIrregularity: CGFloat = 0.0
+
     /// Duration to transition between parameter sets
     private var parameterTransitionDuration: TimeInterval = 2.0
     private var parameterTransitionProgress: TimeInterval = 1.0
@@ -82,12 +88,14 @@ final class BreathingController {
     // MARK: - Update Loop
 
     /// Called every frame to update breathing animation
-    /// - Parameter currentTime: Current scene time
-    func update(currentTime: TimeInterval) {
+    /// - Parameters:
+    ///   - currentTime: Current scene time
+    ///   - deltaTime: Time since last frame (for frame-rate independent animations)
+    func update(currentTime: TimeInterval, deltaTime: TimeInterval) {
         guard let core = coreNode else { return }
 
-        // Update parameter transitions
-        updateParameterTransition(deltaTime: 1.0 / 60.0)
+        // Update parameter transitions using actual delta time (fixes hardcoded 1/60 assumption)
+        updateParameterTransition(deltaTime: deltaTime)
 
         // Calculate breath phase and value
         let phase = calculateBreathPhase(currentTime: currentTime)
@@ -186,6 +194,12 @@ final class BreathingController {
         // Irregularity: 70% (cold) to 0% (radiant)
         targetIrregularity = lerp(0.7, 0.0, adherence)
 
+        // Capture current values as start values for proper interpolation
+        startCycleDuration = cycleDuration
+        startScaleRange = scaleRange
+        startBrightnessRange = brightnessRange
+        startIrregularity = irregularity
+
         // Set transition timing
         parameterTransitionDuration = duration
         parameterTransitionProgress = 0
@@ -199,11 +213,12 @@ final class BreathingController {
         let t = CGFloat((parameterTransitionProgress / parameterTransitionDuration).clamped(to: 0...1))
         let eased = easeInOutQuad(t)
 
-        // Interpolate all parameters
-        cycleDuration = lerp(cycleDuration, targetCycleDuration, Double(eased * 0.1))
-        scaleRange = lerp(scaleRange, targetScaleRange, eased * 0.1)
-        brightnessRange = lerp(brightnessRange, targetBrightnessRange, eased * 0.1)
-        irregularity = lerp(irregularity, targetIrregularity, eased * 0.1)
+        // Interpolate all parameters from start to target using proper easing
+        // (Fixed: was using asymptotic approach that never reached target)
+        cycleDuration = lerp(startCycleDuration, targetCycleDuration, Double(eased))
+        scaleRange = lerp(startScaleRange, targetScaleRange, eased)
+        brightnessRange = lerp(startBrightnessRange, targetBrightnessRange, eased)
+        irregularity = lerp(startIrregularity, targetIrregularity, eased)
     }
 
     // MARK: - Breath Boundary Detection

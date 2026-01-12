@@ -162,8 +162,8 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
         let deltaTime = currentTime - lastUpdateTime
         lastUpdateTime = currentTime
 
-        // Update breathing animation
-        breathingController.update(currentTime: currentTime)
+        // Update breathing animation with actual delta time
+        breathingController.update(currentTime: currentTime, deltaTime: deltaTime)
 
         // Update particles
         particleManager.update(currentTime: currentTime)

@@ -192,21 +192,22 @@ final class CoreNode: SKNode {
     // MARK: - Opacity Animation
 
     /// Animates opacity/brightness based on adherence
+    /// Note: Minimum values increased to ensure Core visibility at neutral (50%) state
     private func animateOpacity(to adherence: CGFloat, duration: TimeInterval) {
-        // Inner core brightness: 0.4 (dim) to 1.0 (radiant)
-        let innerAlpha = lerp(0.4, 1.0, adherence)
+        // Inner core brightness: 0.6 (dim) to 1.0 (radiant) - increased min from 0.4
+        let innerAlpha = lerp(0.6, 1.0, adherence)
         innerCore.run(SKAction.fadeAlpha(to: innerAlpha, duration: duration))
 
-        // Subsurface glow intensity
-        let subsurfaceAlpha = lerp(0.3, 0.8, adherence)
+        // Subsurface glow intensity: 0.5 (dim) to 0.9 (radiant) - increased min from 0.3
+        let subsurfaceAlpha = lerp(0.5, 0.9, adherence)
         subsurfaceGlow.run(SKAction.fadeAlpha(to: subsurfaceAlpha, duration: duration))
 
-        // Striation visibility: barely visible when dim, prominent when radiant
-        let striationAlpha = lerp(0.1, 0.7, adherence)
+        // Striation visibility: 0.25 (dim) to 0.7 (radiant) - increased min from 0.1
+        let striationAlpha = lerp(0.25, 0.7, adherence)
         striationOverlay.run(SKAction.fadeAlpha(to: striationAlpha, duration: duration))
 
-        // Background glow intensity
-        let glowAlpha = lerp(0.2, 0.7, adherence)
+        // Background glow intensity: 0.4 (dim) to 0.8 (radiant) - increased min from 0.2
+        let glowAlpha = lerp(0.4, 0.8, adherence)
         backgroundGlow.run(SKAction.fadeAlpha(to: glowAlpha, duration: duration))
     }
 
@@ -245,14 +246,14 @@ final class CoreNode: SKNode {
     func adjustBrightness(by adjustment: CGFloat) {
         currentBrightnessAdjustment = adjustment
 
-        // Apply brightness as alpha modulation
-        let baseAlpha = lerp(0.4, 1.0, currentAdherence)
-        let adjustedAlpha = (baseAlpha + adjustment * 0.2).clamped(to: 0.2...1.0)
+        // Apply brightness as alpha modulation (using updated base values for visibility)
+        let baseAlpha = lerp(0.6, 1.0, currentAdherence)
+        let adjustedAlpha = (baseAlpha + adjustment * 0.2).clamped(to: 0.4...1.0)
         innerCore.alpha = adjustedAlpha
 
-        // Also modulate subsurface glow
-        let baseSubsurface = lerp(0.3, 0.8, currentAdherence)
-        let adjustedSubsurface = (baseSubsurface + adjustment * 0.15).clamped(to: 0.2...1.0)
+        // Also modulate subsurface glow (using updated base values)
+        let baseSubsurface = lerp(0.5, 0.9, currentAdherence)
+        let adjustedSubsurface = (baseSubsurface + adjustment * 0.15).clamped(to: 0.35...1.0)
         subsurfaceGlow.alpha = adjustedSubsurface
     }
 
@@ -294,8 +295,8 @@ final class CoreNode: SKNode {
 
         let restore = SKAction.run { [weak self] in
             guard let self = self else { return }
-            let baseInner = lerp(0.4, 1.0, self.currentAdherence)
-            let baseSub = lerp(0.3, 0.8, self.currentAdherence)
+            let baseInner = lerp(0.6, 1.0, self.currentAdherence)
+            let baseSub = lerp(0.5, 0.9, self.currentAdherence)
             self.innerCore.alpha = baseInner
             self.subsurfaceGlow.alpha = baseSub
         }
