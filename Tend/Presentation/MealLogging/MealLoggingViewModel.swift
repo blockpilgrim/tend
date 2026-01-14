@@ -150,7 +150,11 @@ final class MealLoggingViewModel {
 
     /// The user's current dietary goal name for display
     var dietaryGoalName: String {
-        appState.currentGoal?.name ?? "your diet"
+        guard let goal = appState.currentGoal else { return "your diet" }
+        if goal.isCustom, let description = goal.customDescription?.trimmingCharacters(in: .whitespacesAndNewlines), !description.isEmpty {
+            return description
+        }
+        return goal.name
     }
 
     /// Clear any error message

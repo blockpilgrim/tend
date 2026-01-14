@@ -72,7 +72,7 @@ struct CaptureView: View {
                         Color.black.opacity(0.5)
                             .ignoresSafeArea()
 
-                        ProgressView()
+                        SwiftUI.ProgressView()
                             .tint(.white)
                             .scaleEffect(1.5)
                     }

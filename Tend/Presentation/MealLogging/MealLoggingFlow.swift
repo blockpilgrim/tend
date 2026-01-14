@@ -15,16 +15,22 @@ struct MealLoggingFlow: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel: MealLoggingViewModel?
 
+    let onMealLogged: (() -> Void)?
+
+    init(onMealLogged: (() -> Void)? = nil) {
+        self.onMealLogged = onMealLogged
+    }
+
     var body: some View {
         Group {
             if let viewModel = viewModel {
-                MealLoggingFlowContent(viewModel: viewModel, dismiss: dismiss)
+                MealLoggingFlowContent(viewModel: viewModel, dismiss: dismiss, onMealLogged: onMealLogged)
             } else {
                 // Loading state
                 ZStack {
                     Color("BackgroundPrimary")
                         .ignoresSafeArea()
-                    ProgressView()
+                    SwiftUI.ProgressView()
                         .tint(Color("TextSecondary"))
                 }
             }
@@ -43,6 +49,7 @@ struct MealLoggingFlow: View {
 private struct MealLoggingFlowContent: View {
     @Bindable var viewModel: MealLoggingViewModel
     let dismiss: DismissAction
+    let onMealLogged: (() -> Void)?
 
     var body: some View {
         NavigationStack {
@@ -65,7 +72,10 @@ private struct MealLoggingFlowContent: View {
                 case .confirmation:
                     ConfirmationView(
                         viewModel: viewModel,
-                        onComplete: { dismiss() },
+                        onComplete: {
+                            onMealLogged?()
+                            dismiss()
+                        },
                         onDismiss: { dismiss() }
                     )
                     .transition(.move(edge: .trailing))

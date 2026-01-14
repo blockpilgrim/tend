@@ -13,6 +13,7 @@ struct OnboardingFlow: View {
     @Environment(\.modelContext) private var modelContext
     @State private var currentStep: OnboardingStep = .welcome
     @State private var selectedGoal: DietaryGoal?
+    @State private var isShowingMealLogger = false
 
     enum OnboardingStep {
         case welcome
@@ -41,10 +42,18 @@ struct OnboardingFlow: View {
 
             case .firstLog:
                 FirstLogStep(
-                    onLogMeal: { completeOnboarding() },
+                    onLogMeal: {
+                        if let goal = selectedGoal {
+                            appState.currentGoal = goal
+                        }
+                        isShowingMealLogger = true
+                    },
                     onSkip: { completeOnboarding() }
                 )
             }
+        }
+        .fullScreenCover(isPresented: $isShowingMealLogger) {
+            MealLoggingFlow(onMealLogged: { completeOnboarding() })
         }
     }
 
@@ -98,6 +107,9 @@ struct DietSelectionStep: View {
     @Binding var selectedGoal: DietaryGoal?
     let onContinue: () -> Void
 
+    @State private var isShowingCustomGoalSheet = false
+    @State private var customGoalDescription: String = ""
+
     let columns = [
         GridItem(.flexible()),
         GridItem(.flexible())
@@ -119,6 +131,29 @@ struct DietSelectionStep: View {
                             action: { selectedGoal = goal }
                         )
                     }
+
+                    Button {
+                        customGoalDescription = (selectedGoal?.isCustom == true) ? (selectedGoal?.customDescription ?? "") : ""
+                        isShowingCustomGoalSheet = true
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Custom goal...")
+                                .font(.subheadline)
+                                .foregroundStyle(isCustomSelected ? .white : Color("TextPrimary"))
+
+                            if isCustomSelected, let description = selectedGoal?.customDescription, !description.isEmpty {
+                                Text(description)
+                                    .font(.caption)
+                                    .foregroundStyle(isCustomSelected ? .white.opacity(0.9) : Color("TextSecondary"))
+                                    .lineLimit(2)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(isCustomSelected ? Color("AccentPrimary") : Color("BackgroundSecondary"))
+                        .cornerRadius(12)
+                    }
+                    .gridCellColumns(2)
                 }
                 .padding(.horizontal)
             }
@@ -135,6 +170,61 @@ struct DietSelectionStep: View {
                 .padding(.horizontal, 32)
                 .padding(.bottom, 48)
                 .disabled(selectedGoal == nil)
+        }
+        .sheet(isPresented: $isShowingCustomGoalSheet) {
+            CustomGoalEntrySheet(
+                initialDescription: customGoalDescription,
+                onSave: { description in
+                    selectedGoal = .custom(description: description)
+                }
+            )
+        }
+    }
+
+    private var isCustomSelected: Bool {
+        selectedGoal?.isCustom == true
+    }
+}
+
+private struct CustomGoalEntrySheet: View {
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var description: String
+    let onSave: (String) -> Void
+
+    init(initialDescription: String, onSave: @escaping (String) -> Void) {
+        _description = State(initialValue: initialDescription)
+        self.onSave = onSave
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Describe your goal", text: $description, axis: .vertical)
+                        .lineLimit(3...6)
+                } footer: {
+                    Text("Examples: 'Whole foods, no late-night snacks' or 'Keto except weekends'.")
+                }
+            }
+            .navigationTitle("Custom Goal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { return }
+                        onSave(trimmed)
+                        dismiss()
+                    }
+                    .disabled(description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
         }
     }
 }

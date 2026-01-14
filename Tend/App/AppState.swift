@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 
+@MainActor
 @Observable
 final class AppState {
 
@@ -33,15 +34,13 @@ final class AppState {
         // Load user settings
         let descriptor = FetchDescriptor<UserSettingsEntity>()
         if let settings = try? context.fetch(descriptor).first {
-            hasCompletedOnboarding = settings.hasCompletedOnboarding
-            soundEnabled = settings.soundEnabled
-            hapticsEnabled = settings.hapticsEnabled
-            isPremium = settings.isPremium
+            apply(settings: settings)
         }
 
         // Load current goal
         let goalDescriptor = FetchDescriptor<DietaryGoalEntity>(
-            predicate: #Predicate { $0.isActive }
+            predicate: #Predicate { $0.isActive },
+            sortBy: [SortDescriptor(\DietaryGoalEntity.createdAt, order: .reverse)]
         )
         if let goalEntity = try? context.fetch(goalDescriptor).first {
             currentGoal = goalEntity.toDomain()
@@ -61,27 +60,82 @@ final class AppState {
     }
 
     func logMeal(_ meal: Meal) async throws {
-        try await mealRepository?.save(meal)
+        guard let repository = mealRepository else {
+            throw AppStateError.persistenceNotReady
+        }
+
+        try await repository.save(meal)
         await refreshCoreState()
     }
 
     func completeOnboarding(with goal: DietaryGoal, context: ModelContext) {
         hasCompletedOnboarding = true
-        currentGoal = goal
+        persistUserSettings(context: context)
+        updateDietaryGoal(goal, context: context)
+    }
 
-        // Persist settings
-        let settings = UserSettingsEntity()
-        settings.hasCompletedOnboarding = true
-        context.insert(settings)
+    func updateDietaryGoal(_ goal: DietaryGoal, context: ModelContext) {
+        // Deactivate existing active goals
+        let activeGoalsDescriptor = FetchDescriptor<DietaryGoalEntity>(
+            predicate: #Predicate { $0.isActive }
+        )
+        if let activeGoals = try? context.fetch(activeGoalsDescriptor) {
+            for entity in activeGoals {
+                entity.isActive = false
+            }
+        }
 
-        // Persist goal
         let goalEntity = DietaryGoalEntity(
             name: goal.name,
             isCustom: goal.isCustom,
-            customDescription: goal.customDescription
+            customDescription: goal.customDescription,
+            isActive: true
         )
         context.insert(goalEntity)
 
+        do {
+            try context.save()
+            currentGoal = goalEntity.toDomain()
+        } catch {
+            // Non-fatal: UI state remains updated even if persistence fails
+            currentGoal = goal
+        }
+    }
+
+    func persistUserSettings(context: ModelContext) {
+        let settings = fetchOrCreateUserSettings(context: context)
+        settings.hasCompletedOnboarding = hasCompletedOnboarding
+        settings.soundEnabled = soundEnabled
+        settings.hapticsEnabled = hapticsEnabled
+        settings.isPremium = isPremium
         try? context.save()
+    }
+
+    private func apply(settings: UserSettingsEntity) {
+        hasCompletedOnboarding = settings.hasCompletedOnboarding
+        soundEnabled = settings.soundEnabled
+        hapticsEnabled = settings.hapticsEnabled
+        isPremium = settings.isPremium
+    }
+
+    private func fetchOrCreateUserSettings(context: ModelContext) -> UserSettingsEntity {
+        let descriptor = FetchDescriptor<UserSettingsEntity>()
+        if let existing = try? context.fetch(descriptor).first {
+            return existing
+        }
+        let settings = UserSettingsEntity()
+        context.insert(settings)
+        return settings
+    }
+}
+
+enum AppStateError: Error, LocalizedError {
+    case persistenceNotReady
+
+    var errorDescription: String? {
+        switch self {
+        case .persistenceNotReady:
+            return "Persistence not ready"
+        }
     }
 }

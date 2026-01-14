@@ -122,7 +122,7 @@ struct ConfirmationView: View {
                 // Processing overlay
                 if viewModel.isProcessing {
                     HStack(spacing: 12) {
-                        ProgressView()
+                        SwiftUI.ProgressView()
                             .tint(Color("TextSecondary"))
                         Text("Saving meal...")
                             .font(.body)
