@@ -52,6 +52,8 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
     /// Hold threshold in seconds
     private let holdThreshold: TimeInterval = 0.3
 
+    private var didStopMotionForTouch = false
+
     // MARK: - Lifecycle
 
     override func didMove(to view: SKView) {
@@ -111,6 +113,18 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
         boundary.physicsBody?.restitution = 0.5
 
         addChild(boundary)
+
+        updateBoundaryPhysics(adherence: currentState.adherencePercentage)
+    }
+
+    private func updateBoundaryPhysics(adherence: CGFloat) {
+        guard let boundary = childNode(withName: "boundary"),
+              let body = boundary.physicsBody
+        else { return }
+
+        let t = easeInOutCubic(adherence.clamped(to: 0...1))
+        body.restitution = lerp(0.25, 0.9, t)
+        body.friction = lerp(0.45, 0.08, t)
     }
 
     /// Builds or rebuilds the Core system when we have a valid scene size.
@@ -195,6 +209,10 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
 
         // Handle hold gesture attraction
         if isTouching && (currentTime - touchStartTime) > holdThreshold {
+            if !didStopMotionForTouch {
+                physicsManager.stopMotion()
+                didStopMotionForTouch = true
+            }
             physicsManager.applyHoldAttraction(toward: lastTouchPosition)
         }
     }
@@ -219,6 +237,8 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
         breathingController.updateParameters(for: newState, duration: duration)
         particleManager.updateEmitters(for: newState, duration: duration)
         physicsManager.updatePhysics(for: newState)
+
+        updateBoundaryPhysics(adherence: newState.adherencePercentage)
     }
 
     /// Calculates transition duration based on direction
@@ -243,8 +263,7 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
         touchStartPosition = location
         lastTouchPosition = location
 
-        // Stop any existing motion when starting a new touch
-        physicsManager?.stopMotion()
+        didStopMotionForTouch = false
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -260,6 +279,7 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
         let timeSinceTouch = CACurrentMediaTime() - touchStartTime
 
         isTouching = false
+        didStopMotionForTouch = false
 
         if timeSinceTouch < holdThreshold {
             // Tap gesture
@@ -273,6 +293,7 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         isTouching = false
+        didStopMotionForTouch = false
     }
 
     // MARK: - Gesture Handling

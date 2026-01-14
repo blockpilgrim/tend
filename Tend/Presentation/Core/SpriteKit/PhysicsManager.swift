@@ -21,7 +21,7 @@ final class PhysicsManager {
         restitution: 0.8,
         linearDamping: 0.1,
         angularDamping: 0.2,
-        responseSpeed: 1.0
+        responseSpeed: 1.15
     )
 
     /// Physics parameters for dim state (heavy, sluggish)
@@ -30,7 +30,7 @@ final class PhysicsManager {
         restitution: 0.25,
         linearDamping: 0.7,
         angularDamping: 0.8,
-        responseSpeed: 0.4
+        responseSpeed: 0.35
     )
 
     // MARK: - Current State
@@ -87,11 +87,16 @@ final class PhysicsManager {
         currentAdherence = state.adherencePercentage
         currentParams = PhysicsManager.interpolateParams(adherence: currentAdherence)
 
-        // Update scene gravity
-        scene?.physicsWorld.gravity = CGVector(
-            dx: 0,
-            dy: -9.8 * currentParams.gravityMultiplier
-        )
+        // Update scene gravity.
+        // Spec intent: radiant should feel buoyant ("heat rises") rather than simply falling slower.
+        // We keep a state-scaled gravity baseline, but apply a small adherence-based buoyancy compensation
+        // so radiant states hover/float instead of steadily sinking.
+        let a = currentAdherence.clamped(to: 0...1)
+        let buoyancyT = easeInOutCubic(a)
+        let buoyancyCompensation = lerp(0.0, 1.02, buoyancyT)
+        let effectiveGravityY = -9.8 * currentParams.gravityMultiplier * (1 - buoyancyCompensation)
+
+        scene?.physicsWorld.gravity = CGVector(dx: 0, dy: effectiveGravityY)
 
         // Update body properties
         if let body = coreNode?.physicsBody {
@@ -114,7 +119,6 @@ final class PhysicsManager {
         isUserInteracting: Bool
     ) {
         _ = deltaTime
-        _ = breathSegment
         guard !isUserInteracting,
               let node = coreNode,
               let body = node.physicsBody,
@@ -144,9 +148,17 @@ final class PhysicsManager {
         targetY += wanderY
 
         // Breath-linked drift (per spec: larger when radiant, minimal when dim)
-        // Map intensity (0..1) -> drift (0..+amp) so inhale lifts and exhale settles.
         let driftPercent = lerp(0.005, 0.05, adherence)
-        targetY += breathIntensity * driftPercent * sceneSize.height
+        let signedBreath: CGFloat
+        switch breathSegment {
+        case .inhale:
+            signedBreath = breathIntensity
+        case .exhale:
+            signedBreath = -breathIntensity * 0.65
+        case .pause:
+            signedBreath = 0
+        }
+        targetY += signedBreath * driftPercent * sceneSize.height
 
         // Keep targets in reasonable bounds (prevents constant pushing into walls)
         let minX = radius + 12
@@ -177,12 +189,13 @@ final class PhysicsManager {
 
     /// Interpolates physics parameters based on adherence
     private static func interpolateParams(adherence: CGFloat) -> PhysicsParams {
+        let t = easeInOutCubic(adherence.clamped(to: 0...1))
         return PhysicsParams(
-            gravityMultiplier: lerp(dimParams.gravityMultiplier, radiantParams.gravityMultiplier, adherence),
-            restitution: lerp(dimParams.restitution, radiantParams.restitution, adherence),
-            linearDamping: lerp(dimParams.linearDamping, radiantParams.linearDamping, adherence),
-            angularDamping: lerp(dimParams.angularDamping, radiantParams.angularDamping, adherence),
-            responseSpeed: lerp(dimParams.responseSpeed, radiantParams.responseSpeed, adherence)
+            gravityMultiplier: lerp(dimParams.gravityMultiplier, radiantParams.gravityMultiplier, t),
+            restitution: lerp(dimParams.restitution, radiantParams.restitution, t),
+            linearDamping: lerp(dimParams.linearDamping, radiantParams.linearDamping, t),
+            angularDamping: lerp(dimParams.angularDamping, radiantParams.angularDamping, t),
+            responseSpeed: lerp(dimParams.responseSpeed, radiantParams.responseSpeed, t)
         )
     }
 
@@ -201,7 +214,7 @@ final class PhysicsManager {
         ).normalized
 
         // Apply impulse scaled by response speed
-        let strength: CGFloat = 80 * currentParams.responseSpeed
+        let strength: CGFloat = 110 * currentParams.responseSpeed
         body.applyImpulse(CGVector(dx: direction.dx * strength, dy: direction.dy * strength))
     }
 
@@ -210,10 +223,14 @@ final class PhysicsManager {
     func applySwipeVelocity(_ velocity: CGVector) {
         guard let body = coreNode?.physicsBody else { return }
 
-        // Scale velocity by response speed
+        let a = currentAdherence.clamped(to: 0...1)
+        let t = easeInOutCubic(a)
+        let gestureGain: CGFloat = lerp(0.22, 0.95, t)
+
+        // Scale velocity by response speed + state gain
         let scaledVelocity = CGVector(
-            dx: velocity.dx * currentParams.responseSpeed * 0.5,
-            dy: velocity.dy * currentParams.responseSpeed * 0.5
+            dx: velocity.dx * currentParams.responseSpeed * gestureGain,
+            dy: velocity.dy * currentParams.responseSpeed * gestureGain
         )
 
         // Clamp to reasonable maximum
