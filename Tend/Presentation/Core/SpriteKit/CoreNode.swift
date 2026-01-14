@@ -16,11 +16,16 @@ final class CoreNode: SKNode {
 
     // MARK: - Configuration
 
-    /// Base size of the core (before breathing scale)
-    private let baseSize: CGFloat
+    /// Base diameter of the core (before breathing scale)
+    private let baseDiameterValue: CGFloat
 
-    /// Base position (center of screen, used for breathing drift)
-    private(set) var basePosition: CGPoint = .zero
+    /// Public read-only diameter (used by scene/managers)
+    var baseDiameter: CGFloat { baseDiameterValue }
+
+    var baseRadius: CGFloat { baseDiameterValue / 2 }
+
+    /// Visual root (scaled/brightened by breathing) separate from the physics root.
+    private let visualRoot = SKNode()
 
     // MARK: - Visual Layers (bottom to top)
 
@@ -44,26 +49,29 @@ final class CoreNode: SKNode {
 
     // MARK: - State
 
-    /// Current brightness adjustment from breathing
-    private var currentBrightnessAdjustment: CGFloat = 0
-
     /// Current adherence for reference
     private var currentAdherence: CGFloat = 0.5
 
+    /// Seed for subtle internal drift (inner core float)
+    private let driftSeed: CGFloat = CGFloat.random(in: 0...1000)
+
+    private var tapFlashStartTime: TimeInterval?
+    private var tapFlashStrength: CGFloat = 0
+
     // MARK: - Initialization
 
-    /// Creates a new CoreNode with the specified base size
-    /// - Parameter baseSize: The diameter of the core in points
-    init(baseSize: CGFloat = 120) {
-        self.baseSize = baseSize
+    /// Creates a new CoreNode with the specified base diameter
+    /// - Parameter baseDiameter: The diameter of the core in points
+    init(baseDiameter: CGFloat = 120) {
+        self.baseDiameterValue = baseDiameter
 
         let generator = CoreTextureGenerator.shared
 
         // Create layers with appropriate sizes
-        let glowSize = CGSize(width: baseSize * 2.5, height: baseSize * 2.5)
-        let surfaceSize = CGSize(width: baseSize, height: baseSize)
-        let innerSize = CGSize(width: baseSize * 0.5, height: baseSize * 0.5)
-        let striationSize = CGSize(width: baseSize * 0.9, height: baseSize * 0.9)
+        let glowSize = CGSize(width: baseDiameter * 2.5, height: baseDiameter * 2.5)
+        let surfaceSize = CGSize(width: baseDiameter, height: baseDiameter)
+        let innerSize = CGSize(width: baseDiameter * 0.5, height: baseDiameter * 0.5)
+        let striationSize = CGSize(width: baseDiameter * 0.9, height: baseDiameter * 0.9)
 
         // Background glow - largest, softest layer
         backgroundGlow = SKSpriteNode(texture: generator.generateGlowTexture(size: glowSize, falloff: 0.3))
@@ -80,7 +88,7 @@ final class CoreNode: SKNode {
 
         // Subsurface glow - diffuse inner light
         subsurfaceGlow = SKSpriteNode(texture: generator.generateGlowTexture(size: surfaceSize, falloff: 0.5))
-        subsurfaceGlow.size = CGSize(width: baseSize * 1.2, height: baseSize * 1.2)
+        subsurfaceGlow.size = CGSize(width: baseDiameter * 1.2, height: baseDiameter * 1.2)
         subsurfaceGlow.blendMode = .add
         subsurfaceGlow.alpha = 0.7
         subsurfaceGlow.zPosition = 2
@@ -108,13 +116,15 @@ final class CoreNode: SKNode {
 
         super.init()
 
+        addChild(visualRoot)
+
         // Build layer hierarchy
-        addChild(backgroundGlow)
-        addChild(effectNode)
+        visualRoot.addChild(backgroundGlow)
+        visualRoot.addChild(effectNode)
         effectNode.addChild(subsurfaceGlow)
-        addChild(outerSurface)
-        addChild(innerCore)
-        addChild(striationOverlay)
+        visualRoot.addChild(outerSurface)
+        visualRoot.addChild(innerCore)
+        visualRoot.addChild(striationOverlay)
 
         // Set initial colors to neutral state
         applyColors(forAdherence: 0.5)
@@ -136,9 +146,6 @@ final class CoreNode: SKNode {
 
         // Animate color transitions
         animateColors(to: adherence, duration: duration)
-
-        // Animate brightness/opacity transitions
-        animateOpacity(to: adherence, duration: duration)
 
         // Animate glow radius
         animateGlowRadius(to: adherence, duration: duration)
@@ -189,28 +196,6 @@ final class CoreNode: SKNode {
         striationOverlay.run(SKAction.colorize(with: striationColor, colorBlendFactor: 1.0, duration: duration))
     }
 
-    // MARK: - Opacity Animation
-
-    /// Animates opacity/brightness based on adherence
-    /// Note: Minimum values increased to ensure Core visibility at neutral (50%) state
-    private func animateOpacity(to adherence: CGFloat, duration: TimeInterval) {
-        // Inner core brightness: 0.6 (dim) to 1.0 (radiant) - increased min from 0.4
-        let innerAlpha = lerp(0.6, 1.0, adherence)
-        innerCore.run(SKAction.fadeAlpha(to: innerAlpha, duration: duration))
-
-        // Subsurface glow intensity: 0.5 (dim) to 0.9 (radiant) - increased min from 0.3
-        let subsurfaceAlpha = lerp(0.5, 0.9, adherence)
-        subsurfaceGlow.run(SKAction.fadeAlpha(to: subsurfaceAlpha, duration: duration))
-
-        // Striation visibility: 0.25 (dim) to 0.7 (radiant) - increased min from 0.1
-        let striationAlpha = lerp(0.25, 0.7, adherence)
-        striationOverlay.run(SKAction.fadeAlpha(to: striationAlpha, duration: duration))
-
-        // Background glow intensity: 0.4 (dim) to 0.8 (radiant) - increased min from 0.2
-        let glowAlpha = lerp(0.4, 0.8, adherence)
-        backgroundGlow.run(SKAction.fadeAlpha(to: glowAlpha, duration: duration))
-    }
-
     // MARK: - Glow Radius Animation
 
     /// Animates glow radius based on adherence
@@ -218,16 +203,16 @@ final class CoreNode: SKNode {
         // Glow radius: smaller when dim, larger when radiant
         let glowScale = lerp(0.6, 1.2, adherence)
         let glowSize = CGSize(
-            width: baseSize * 2.5 * glowScale,
-            height: baseSize * 2.5 * glowScale
+            width: baseDiameterValue * 2.5 * glowScale,
+            height: baseDiameterValue * 2.5 * glowScale
         )
         backgroundGlow.run(SKAction.resize(toWidth: glowSize.width, height: glowSize.height, duration: duration))
 
         // Subsurface also scales slightly
         let subsurfaceScale = lerp(0.9, 1.3, adherence)
         let subsurfaceSize = CGSize(
-            width: baseSize * 1.2 * subsurfaceScale,
-            height: baseSize * 1.2 * subsurfaceScale
+            width: baseDiameterValue * 1.2 * subsurfaceScale,
+            height: baseDiameterValue * 1.2 * subsurfaceScale
         )
         subsurfaceGlow.run(SKAction.resize(toWidth: subsurfaceSize.width, height: subsurfaceSize.height, duration: duration))
     }
@@ -237,37 +222,56 @@ final class CoreNode: SKNode {
     /// Sets the scale of all layers (called by BreathingController)
     /// - Parameter scale: Scale factor (1.0 = normal, >1 = expanded, <1 = contracted)
     func setBreathScale(_ scale: CGFloat) {
-        // Scale the entire node
-        self.setScale(scale)
+        // Scale visuals only (physics body remains stable)
+        visualRoot.setScale(scale)
     }
 
-    /// Adjusts brightness for breathing effect
-    /// - Parameter adjustment: Brightness adjustment (-1 to 1)
-    func adjustBrightness(by adjustment: CGFloat) {
-        currentBrightnessAdjustment = adjustment
+    /// Applies breath-driven brightness + subtle internal drift.
+    /// - Parameters:
+    ///   - intensity: Breath intensity 0...1 (0 = resting/exhale, 1 = peak inhale)
+    ///   - brightnessBoost: Brightness boost 0...~0.2 (state-dependent)
+    ///   - time: Scene time for drift
+    func applyBreath(intensity: CGFloat, brightnessBoost: CGFloat, time: TimeInterval) {
+        let i = intensity.clamped(to: 0...1)
+        let b = brightnessBoost.clamped(to: 0...0.25)
 
-        // Apply brightness as alpha modulation (using updated base values for visibility)
-        let baseAlpha = lerp(0.6, 1.0, currentAdherence)
-        let adjustedAlpha = (baseAlpha + adjustment * 0.2).clamped(to: 0.4...1.0)
-        innerCore.alpha = adjustedAlpha
+        var tapFlash: CGFloat = 0
+        if let start = tapFlashStartTime {
+            let elapsed = time - start
+            if elapsed >= 0.18 {
+                tapFlashStartTime = nil
+                tapFlashStrength = 0
+            } else if elapsed >= 0 {
+                let t = (1 - CGFloat(elapsed / 0.18)).clamped(to: 0...1)
+                tapFlash = tapFlashStrength * t
+            }
+        }
 
-        // Also modulate subsurface glow (using updated base values)
-        let baseSubsurface = lerp(0.5, 0.9, currentAdherence)
-        let adjustedSubsurface = (baseSubsurface + adjustment * 0.15).clamped(to: 0.35...1.0)
-        subsurfaceGlow.alpha = adjustedSubsurface
-    }
+        // Baseline visibility by state (ensures the Core reads even when "cold")
+        let baseInner = lerp(0.55, 1.0, currentAdherence)
+        let baseSub = lerp(0.45, 0.9, currentAdherence)
+        let baseStriation = lerp(0.18, 0.7, currentAdherence)
+        let baseHalo = lerp(0.35, 0.85, currentAdherence)
 
-    /// Sets base position for breathing drift calculation
-    func setBasePosition(_ position: CGPoint) {
-        basePosition = position
-        self.position = position
+        let totalBoost = (b + tapFlash * 0.25).clamped(to: 0...0.4)
+
+        innerCore.alpha = (baseInner * (1 + totalBoost)).clamped(to: 0.25...1.0)
+        subsurfaceGlow.alpha = (baseSub * (1 + totalBoost * 0.8)).clamped(to: 0.20...1.0)
+        striationOverlay.alpha = (baseStriation * (0.85 + 0.25 * i) + totalBoost * 0.10).clamped(to: 0.0...1.0)
+        backgroundGlow.alpha = (baseHalo * (0.90 + 0.15 * i) + totalBoost * 0.15).clamped(to: 0.0...1.0)
+
+        // Inner core drift (subtle, more noticeable when radiant)
+        let driftAmplitude = baseRadius * lerp(0.010, 0.028, currentAdherence)
+        let dx = sin(time * 0.35 + driftSeed) * driftAmplitude
+        let dy = cos(time * 0.27 + driftSeed * 1.7) * driftAmplitude
+        innerCore.position = CGPoint(x: dx, y: dy)
     }
 
     // MARK: - Physics Setup
 
     /// Creates and attaches a physics body for interactions
     func setupPhysicsBody() {
-        let radius = baseSize / 2
+        let radius = baseDiameterValue / 2
         guard radius > 0 else { return }
         physicsBody = SKPhysicsBody(circleOfRadius: radius)
         physicsBody?.isDynamic = true
@@ -286,22 +290,8 @@ final class CoreNode: SKNode {
 
     /// Flash effect when tapped
     func flashOnTap(intensity: CGFloat) {
-        let brighten = SKAction.run { [weak self] in
-            self?.innerCore.alpha = 1.0
-            self?.subsurfaceGlow.alpha = 1.0
-        }
-
-        let wait = SKAction.wait(forDuration: 0.1)
-
-        let restore = SKAction.run { [weak self] in
-            guard let self = self else { return }
-            let baseInner = lerp(0.6, 1.0, self.currentAdherence)
-            let baseSub = lerp(0.5, 0.9, self.currentAdherence)
-            self.innerCore.alpha = baseInner
-            self.subsurfaceGlow.alpha = baseSub
-        }
-
-        run(SKAction.sequence([brighten, wait, restore]))
+        tapFlashStartTime = CACurrentMediaTime()
+        tapFlashStrength = intensity.clamped(to: 0...1)
     }
 }
 

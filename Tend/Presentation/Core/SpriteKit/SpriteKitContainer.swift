@@ -31,7 +31,12 @@ struct SpriteKitContainer: UIViewRepresentable {
         view.showsNodeCount = false
 
         // Create and present scene
-        let scene = RadiantCoreScene.create(size: view.bounds.size)
+        let initialSize = view.bounds.size
+        let sceneSize = (initialSize.width > 1 && initialSize.height > 1)
+            ? initialSize
+            : CGSize(width: 1, height: 1)
+
+        let scene = RadiantCoreScene.create(size: sceneSize)
         view.presentScene(scene)
 
         // Store scene reference in coordinator

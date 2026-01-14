@@ -29,8 +29,8 @@ final class ParticleManager {
 
     // MARK: - References
 
-    /// Parent node for particles
-    private weak var parentNode: SKNode?
+    /// Core node for continuous emitters (moves with physics)
+    private weak var coreNode: CoreNode?
 
     /// Scene for particle targeting
     private weak var scene: SKScene?
@@ -48,9 +48,9 @@ final class ParticleManager {
     /// - Parameters:
     ///   - scene: The SpriteKit scene
     ///   - parentNode: The node to attach emitters to
-    func attach(to scene: SKScene, parentNode: SKNode) {
+    func attach(to scene: SKScene, coreNode: CoreNode) {
         self.scene = scene
-        self.parentNode = parentNode
+        self.coreNode = coreNode
 
         // Create all emitters
         createEmitters()
@@ -63,20 +63,22 @@ final class ParticleManager {
 
     /// Creates all particle emitters with base configuration
     private func createEmitters() {
-        sparkEmitter = createSparkEmitter()
-        emberEmitter = createEmberEmitter()
-        smokeEmitter = createSmokeEmitter()
-        ashEmitter = createAshEmitter()
+        let radius = coreNode?.baseRadius ?? 60
+
+        sparkEmitter = createSparkEmitter(coreRadius: radius)
+        emberEmitter = createEmberEmitter(coreRadius: radius)
+        smokeEmitter = createSmokeEmitter(coreRadius: radius)
+        ashEmitter = createAshEmitter(coreRadius: radius)
 
         // Add to parent
-        if let spark = sparkEmitter { parentNode?.addChild(spark) }
-        if let ember = emberEmitter { parentNode?.addChild(ember) }
-        if let smoke = smokeEmitter { parentNode?.addChild(smoke) }
-        if let ash = ashEmitter { parentNode?.addChild(ash) }
+        if let spark = sparkEmitter { coreNode?.addChild(spark) }
+        if let ember = emberEmitter { coreNode?.addChild(ember) }
+        if let smoke = smokeEmitter { coreNode?.addChild(smoke) }
+        if let ash = ashEmitter { coreNode?.addChild(ash) }
     }
 
     /// Creates the spark emitter for radiant states
-    private func createSparkEmitter() -> SKEmitterNode {
+    private func createSparkEmitter(coreRadius: CGFloat) -> SKEmitterNode {
         let emitter = SKEmitterNode()
 
         // Texture
@@ -93,7 +95,7 @@ final class ParticleManager {
 
         // Position
         emitter.position = .zero
-        emitter.particlePositionRange = CGVector(dx: 50, dy: 30)
+        emitter.particlePositionRange = CGVector(dx: coreRadius * 0.9, dy: coreRadius * 0.5)
 
         // Movement
         emitter.particleSpeed = 60
@@ -127,7 +129,7 @@ final class ParticleManager {
     }
 
     /// Creates the ember emitter for highly radiant states
-    private func createEmberEmitter() -> SKEmitterNode {
+    private func createEmberEmitter(coreRadius: CGFloat) -> SKEmitterNode {
         let emitter = SKEmitterNode()
 
         let texture = CoreTextureGenerator.shared.generateParticleTexture(size: CGSize(width: 12, height: 12))
@@ -140,7 +142,7 @@ final class ParticleManager {
         emitter.particleLifetimeRange = 0.5
 
         emitter.position = .zero
-        emitter.particlePositionRange = CGVector(dx: 40, dy: 20)
+        emitter.particlePositionRange = CGVector(dx: coreRadius * 0.7, dy: coreRadius * 0.35)
 
         emitter.particleSpeed = 30
         emitter.particleSpeedRange = 15
@@ -168,7 +170,7 @@ final class ParticleManager {
     }
 
     /// Creates the smoke emitter for dim states
-    private func createSmokeEmitter() -> SKEmitterNode {
+    private func createSmokeEmitter(coreRadius: CGFloat) -> SKEmitterNode {
         let emitter = SKEmitterNode()
 
         let texture = CoreTextureGenerator.shared.generateGlowTexture(size: CGSize(width: 20, height: 20), falloff: 0.6)
@@ -181,7 +183,7 @@ final class ParticleManager {
         emitter.particleLifetimeRange = 0.5
 
         emitter.position = .zero
-        emitter.particlePositionRange = CGVector(dx: 30, dy: 20)
+        emitter.particlePositionRange = CGVector(dx: coreRadius * 0.5, dy: coreRadius * 0.35)
 
         emitter.particleSpeed = 20
         emitter.particleSpeedRange = 10
@@ -209,7 +211,7 @@ final class ParticleManager {
     }
 
     /// Creates the ash emitter for very dim states
-    private func createAshEmitter() -> SKEmitterNode {
+    private func createAshEmitter(coreRadius: CGFloat) -> SKEmitterNode {
         let emitter = SKEmitterNode()
 
         let texture = CoreTextureGenerator.shared.generateParticleTexture(size: CGSize(width: 6, height: 6))
@@ -222,7 +224,7 @@ final class ParticleManager {
         emitter.particleLifetimeRange = 1.0
 
         emitter.position = .zero
-        emitter.particlePositionRange = CGVector(dx: 40, dy: 10)
+        emitter.particlePositionRange = CGVector(dx: coreRadius * 0.7, dy: coreRadius * 0.2)
 
         emitter.particleSpeed = 15
         emitter.particleSpeedRange = 5
@@ -296,7 +298,7 @@ final class ParticleManager {
     ///   - position: Burst position in parent coordinates
     ///   - intensity: Intensity of the burst (0 to 1)
     func emitSparkBurst(at position: CGPoint, intensity: CGFloat) {
-        guard let parent = parentNode, currentAdherence > 0.3 else { return }
+        guard let scene, currentAdherence > 0.3 else { return }
 
         // Create temporary emitter for burst
         let burst = SKEmitterNode()
@@ -328,7 +330,7 @@ final class ParticleManager {
         burst.zPosition = 15
         burst.targetNode = scene
 
-        parent.addChild(burst)
+        scene.addChild(burst)
 
         // Remove after emission completes
         burst.run(SKAction.sequence([

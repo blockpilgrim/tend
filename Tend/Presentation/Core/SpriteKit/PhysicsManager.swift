@@ -47,11 +47,19 @@ final class PhysicsManager {
     /// Current adherence for reference
     private var currentAdherence: CGFloat = 0.5
 
+    // MARK: - Natural Motion
+
+    private let wanderSeedX: TimeInterval
+    private let wanderSeedY: TimeInterval
+
     // MARK: - Initialization
 
     init() {
         // Start with neutral parameters
         currentParams = PhysicsManager.interpolateParams(adherence: 0.5)
+
+        wanderSeedX = TimeInterval.random(in: 0...1000)
+        wanderSeedY = TimeInterval.random(in: 0...1000)
     }
 
     // MARK: - Setup
@@ -91,6 +99,78 @@ final class PhysicsManager {
             body.linearDamping = currentParams.linearDamping
             body.angularDamping = currentParams.angularDamping
         }
+    }
+
+    // MARK: - Natural Motion
+
+    /// Applies gentle state-dependent forces so the Core feels alive even when untouched.
+    /// - Note: This is intentionally subtle and is disabled while the user is actively touching.
+    func updateNaturalMotion(
+        currentTime: TimeInterval,
+        deltaTime: TimeInterval,
+        sceneSize: CGSize,
+        breathIntensity: CGFloat,
+        breathSegment: BreathSegment,
+        isUserInteracting: Bool
+    ) {
+        _ = deltaTime
+        _ = breathSegment
+        guard !isUserInteracting,
+              let node = coreNode,
+              let body = node.physicsBody,
+              sceneSize.width > 1,
+              sceneSize.height > 1
+        else { return }
+
+        let adherence = currentAdherence
+        let radius = max(8, node.baseRadius)
+
+        // Desired resting height (radiant floats higher, dim settles low)
+        let minY = radius + 16
+        let maxY = min(sceneSize.height * 0.75, sceneSize.height - radius - 24)
+        var targetY = lerp(minY, maxY, easeInOutSine(adherence))
+
+        // Gentle meander (more active when radiant)
+        let centerX = sceneSize.width / 2
+        let ampX = lerp(sceneSize.width * 0.02, sceneSize.width * 0.12, adherence)
+        let ampY = lerp(sceneSize.height * 0.01, sceneSize.height * 0.06, adherence)
+
+        let wanderX = sin(currentTime * 0.12 + wanderSeedX) * ampX
+            + sin(currentTime * 0.037 + wanderSeedX * 0.5) * (ampX * 0.35)
+        let wanderY = cos(currentTime * 0.10 + wanderSeedY) * ampY
+            + sin(currentTime * 0.053 + wanderSeedY * 0.7) * (ampY * 0.25)
+
+        var targetX = centerX + wanderX
+        targetY += wanderY
+
+        // Breath-linked drift (per spec: larger when radiant, minimal when dim)
+        // Map intensity (0..1) -> drift (0..+amp) so inhale lifts and exhale settles.
+        let driftPercent = lerp(0.005, 0.05, adherence)
+        targetY += breathIntensity * driftPercent * sceneSize.height
+
+        // Keep targets in reasonable bounds (prevents constant pushing into walls)
+        let minX = radius + 12
+        let maxX = sceneSize.width - radius - 12
+        targetX = targetX.clamped(to: minX...maxX)
+        targetY = targetY.clamped(to: (radius + 12)...(sceneSize.height - radius - 12))
+
+        // Spring-like force toward target
+        let dx = targetX - node.position.x
+        let dy = targetY - node.position.y
+        let normalizedDx = dx / sceneSize.width
+        let normalizedDy = dy / sceneSize.height
+
+        let baseForce: CGFloat = lerp(25, 95, adherence)
+        let response = currentParams.responseSpeed
+
+        // A touch of velocity damping to avoid jitter.
+        let v = body.velocity
+        let damping: CGFloat = lerp(0.12, 0.05, adherence)
+
+        let fx = (normalizedDx * baseForce - v.dx * damping) * response
+        let fy = (normalizedDy * baseForce - v.dy * damping) * response
+
+        body.applyForce(CGVector(dx: fx, dy: fy))
     }
 
     // MARK: - Parameter Interpolation

@@ -16,16 +16,16 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Components
 
     /// The visual representation of the Core
-    private var coreNode: CoreNode!
+    private var coreNode: CoreNode?
 
     /// Controls the breathing animation
-    private var breathingController: BreathingController!
+    private var breathingController: BreathingController?
 
     /// Manages particle effects
-    private var particleManager: ParticleManager!
+    private var particleManager: ParticleManager?
 
     /// Manages physics behavior
-    private var physicsManager: PhysicsManager!
+    private var physicsManager: PhysicsManager?
 
     // MARK: - State
 
@@ -56,26 +56,21 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
 
     override func didMove(to view: SKView) {
         setupScene()
-        setupCore()
-        setupPhysics()
-        setupParticles()
-        startBreathing()
+        setupPhysicsWorld()
+        setupBoundaries()
+        rebuildCoreSystemIfNeeded(force: true)
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
         super.didChangeSize(oldSize)
 
-        // Update core position to center
-        if let core = coreNode {
-            let centerPosition = CGPoint(x: size.width / 2, y: size.height / 2)
-            core.setBasePosition(centerPosition)
-        }
-
-        // Update boundaries
         setupBoundaries()
+        rebuildCoreSystemIfNeeded(force: false)
 
-        // Update breathing controller screen height
-        breathingController?.setScreenHeight(size.height)
+        // Keep the Core centered on size changes (e.g. rotation)
+        if let coreNode {
+            coreNode.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        }
     }
 
     // MARK: - Setup
@@ -86,31 +81,11 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
         scaleMode = .resizeFill
     }
 
-    /// Creates and positions the CoreNode
-    private func setupCore() {
-        // Create core with appropriate size
-        let coreSize: CGFloat = min(size.width, size.height) * 0.3
-        coreNode = CoreNode(baseSize: coreSize)
-
-        // Position at center
-        let centerPosition = CGPoint(x: size.width / 2, y: size.height / 2)
-        coreNode.setBasePosition(centerPosition)
-
-        addChild(coreNode)
-    }
-
-    /// Configures physics world and boundaries
-    private func setupPhysics() {
-        // Configure physics world
-        physicsWorld.gravity = CGVector(dx: 0, dy: -2.9)  // Reduced gravity
+    /// Configures physics world.
+    /// Note: Core-specific physics is configured when the Core system is built.
+    private func setupPhysicsWorld() {
+        physicsWorld.gravity = CGVector(dx: 0, dy: -9.8)
         physicsWorld.contactDelegate = self
-
-        // Create physics manager
-        physicsManager = PhysicsManager()
-        physicsManager.attach(to: self, coreNode: coreNode)
-
-        // Set up screen boundaries
-        setupBoundaries()
     }
 
     /// Creates physics boundaries at screen edges
@@ -138,18 +113,56 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
         addChild(boundary)
     }
 
-    /// Sets up particle manager
-    private func setupParticles() {
+    /// Builds or rebuilds the Core system when we have a valid scene size.
+    /// SwiftUI often creates the underlying SKView with `bounds = .zero`.
+    /// We intentionally defer Core creation until the scene is resized to a real size.
+    private func rebuildCoreSystemIfNeeded(force: Bool) {
+        guard size.width > 1, size.height > 1 else { return }
+
+        let desiredDiameter = desiredCoreDiameter(for: size)
+        let needsRebuild: Bool
+
+        if force {
+            needsRebuild = true
+        } else if let existing = coreNode {
+            needsRebuild = abs(existing.baseDiameter - desiredDiameter) > 0.5
+        } else {
+            needsRebuild = true
+        }
+
+        guard needsRebuild else {
+            breathingController?.setScreenHeight(size.height)
+            return
+        }
+
+        coreNode?.removeFromParent()
+
+        let core = CoreNode(baseDiameter: desiredDiameter)
+        core.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        addChild(core)
+        coreNode = core
+
+        // Recreate managers (they hold references to the CoreNode)
+        physicsManager = PhysicsManager()
+        physicsManager?.attach(to: self, coreNode: core)
+
         particleManager = ParticleManager()
-        particleManager.attach(to: self, parentNode: coreNode)
+        particleManager?.attach(to: self, coreNode: core)
+
+        breathingController = BreathingController()
+        breathingController?.attach(to: core)
+        breathingController?.setScreenHeight(size.height)
+
+        // Apply the currently-known state immediately
+        updateState(currentState, animated: false)
     }
 
-    /// Initializes and starts the breathing controller
-    private func startBreathing() {
-        breathingController = BreathingController()
-        breathingController.attach(to: coreNode)
-        breathingController.setScreenHeight(size.height)
-        breathingController.updateParameters(for: currentState, duration: 0)
+    private func desiredCoreDiameter(for sceneSize: CGSize) -> CGFloat {
+        // Spec target: ~15–20% of screen width.
+        let byWidth = sceneSize.width * 0.18
+        let byHeight = sceneSize.height * 0.25
+        let raw = min(byWidth, byHeight)
+        return raw.clamped(to: 64...180)
     }
 
     // MARK: - Update Loop
@@ -162,11 +175,23 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
         let deltaTime = currentTime - lastUpdateTime
         lastUpdateTime = currentTime
 
+        guard let breathingController, let physicsManager else { return }
+
         // Update breathing animation with actual delta time
         breathingController.update(currentTime: currentTime, deltaTime: deltaTime)
 
+        // Natural motion + breath drift (skip when user is actively touching)
+        physicsManager.updateNaturalMotion(
+            currentTime: currentTime,
+            deltaTime: deltaTime,
+            sceneSize: size,
+            breathIntensity: breathingController.currentBreathIntensity,
+            breathSegment: breathingController.currentSegment,
+            isUserInteracting: isTouching
+        )
+
         // Update particles
-        particleManager.update(currentTime: currentTime)
+        particleManager?.update(currentTime: currentTime)
 
         // Handle hold gesture attraction
         if isTouching && (currentTime - touchStartTime) > holdThreshold {
@@ -181,15 +206,19 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
     ///   - newState: The target CoreState
     ///   - animated: Whether to animate the transition
     func updateState(_ newState: CoreState, animated: Bool = true) {
-        let duration = animated ? transitionDuration(from: currentState, to: newState) : 0
+        let oldState = currentState
+        currentState = newState
+
+        // If the Core hasn't been built yet (scene still sizing), defer application.
+        guard let coreNode, let breathingController, let particleManager, let physicsManager else { return }
+
+        let duration = animated ? transitionDuration(from: oldState, to: newState) : 0
 
         // Update all components
         coreNode.interpolateVisuals(to: newState, duration: duration)
         breathingController.updateParameters(for: newState, duration: duration)
         particleManager.updateEmitters(for: newState, duration: duration)
         physicsManager.updatePhysics(for: newState)
-
-        currentState = newState
     }
 
     /// Calculates transition duration based on direction
@@ -215,20 +244,12 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
         lastTouchPosition = location
 
         // Stop any existing motion when starting a new touch
-        physicsManager.stopMotion()
+        physicsManager?.stopMotion()
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)
-
-        // If holding, core follows finger (for drag)
-        let timeSinceTouch = CACurrentMediaTime() - touchStartTime
-        if timeSinceTouch > holdThreshold {
-            // Update core position directly for drag behavior
-            coreNode.position = location
-            coreNode.setBasePosition(location)
-        }
 
         lastTouchPosition = location
     }
@@ -259,24 +280,23 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
     /// Handles a tap gesture
     private func handleTap(at location: CGPoint) {
         // Apply impulse toward tap location
-        physicsManager.applyTapImpulse(at: location)
+        physicsManager?.applyTapImpulse(at: location)
 
         // Visual feedback
-        coreNode.flashOnTap(intensity: currentState.adherencePercentage)
+        coreNode?.flashOnTap(intensity: currentState.adherencePercentage)
 
         // Particle burst (only if somewhat radiant)
         if currentState.adherencePercentage > 0.3 {
-            particleManager.emitSparkBurst(at: .zero, intensity: currentState.adherencePercentage)
+            if let coreNode {
+                particleManager?.emitSparkBurst(at: coreNode.position, intensity: currentState.adherencePercentage)
+            }
         }
     }
 
     /// Handles release after hold/drag
     private func handleRelease(velocity: CGVector) {
         // Apply swipe velocity
-        physicsManager.applySwipeVelocity(velocity)
-
-        // Reset base position to current position
-        coreNode.setBasePosition(coreNode.position)
+        physicsManager?.applySwipeVelocity(velocity)
     }
 
     /// Calculates velocity from touch movement
@@ -305,13 +325,13 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
     /// Handles collision with screen boundary
     private func handleWallCollision(contact: SKPhysicsContact, coreBody: SKPhysicsBody) {
         let velocity = coreBody.velocity
-        let intensity = physicsManager.collisionIntensity(velocity: velocity)
+        let intensity = physicsManager?.collisionIntensity(velocity: velocity) ?? 0
 
         // Only emit effects for significant collisions
         guard intensity > 0.1 else { return }
 
         // Particle effect at contact point
-        particleManager.emitCollisionEffect(at: contact.contactPoint, velocity: velocity)
+        particleManager?.emitCollisionEffect(at: contact.contactPoint, velocity: velocity)
 
         // Future: Haptic feedback integration point
         // hapticsManager?.playWallCollision(state: currentState, velocity: intensity)
