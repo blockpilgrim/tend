@@ -32,6 +32,12 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
     /// Current Core state
     private var currentState: CoreState = .neutral
 
+    /// Whether apex effects are enabled (perfect adherence + >1 meal today)
+    private var isApexEligible: Bool = false
+
+    /// Pending one-shot event if the Core system hasn't been built yet
+    private var pendingVFXEvent: CoreVFXEvent?
+
     /// Last update time for delta calculation
     private var lastUpdateTime: TimeInterval = 0
 
@@ -167,8 +173,16 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
         breathingController?.attach(to: core)
         breathingController?.setScreenHeight(size.height)
 
+        core.setApexEligible(isApexEligible, animated: false)
+        particleManager?.setApexEligible(isApexEligible, animated: false)
+
         // Apply the currently-known state immediately
         updateState(currentState, animated: false)
+
+        if let event = pendingVFXEvent {
+            pendingVFXEvent = nil
+            handleVFXEvent(event)
+        }
     }
 
     private func desiredCoreDiameter(for sceneSize: CGSize) -> CGFloat {
@@ -193,6 +207,20 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
 
         // Update breathing animation with actual delta time
         breathingController.update(currentTime: currentTime, deltaTime: deltaTime)
+
+        if breathingController.didPeakInhale {
+            let intensity = currentState.adherencePercentage
+            coreNode?.triggerStriationPulse(intensity: intensity)
+
+            if let coreNode {
+                if isApexEligible {
+                    coreNode.triggerApexInhaleFlare(intensity: 1.0)
+                    particleManager?.emitApexBreathMicroBurst(at: coreNode.position, intensity: intensity)
+                } else {
+                    particleManager?.emitBreathMicroBurst(at: coreNode.position, intensity: intensity)
+                }
+            }
+        }
 
         // Natural motion + breath drift (skip when user is actively touching)
         physicsManager.updateNaturalMotion(
@@ -239,6 +267,121 @@ final class RadiantCoreScene: SKScene, SKPhysicsContactDelegate {
         physicsManager.updatePhysics(for: newState)
 
         updateBoundaryPhysics(adherence: newState.adherencePercentage)
+    }
+
+    /// Updates whether apex effects are enabled.
+    func setApexEligible(_ eligible: Bool, animated: Bool = true) {
+        isApexEligible = eligible
+        coreNode?.setApexEligible(eligible, animated: animated)
+        particleManager?.setApexEligible(eligible, animated: animated)
+    }
+
+    /// Plays a one-shot VFX event (meal logging reward, apex ignition).
+    func handleVFXEvent(_ event: CoreVFXEvent) {
+        // If the Core hasn't been built yet (scene still sizing), defer.
+        guard let coreNode else {
+            pendingVFXEvent = event
+            return
+        }
+
+        switch event.kind {
+        case .mealOnTrack:
+            coreNode.triggerEventFlash(strength: lerp(0.45, 1.0, currentState.adherencePercentage))
+            coreNode.triggerScalePop(strength: lerp(0.06, 0.11, currentState.adherencePercentage))
+
+            emitRing(
+                color: ColorPalette.radiantHaloUI,
+                blendMode: .add,
+                baseScale: 0.65,
+                finalScale: 1.75,
+                duration: 0.52
+            )
+
+            particleManager?.emitMealOnTrackCelebration(
+                at: coreNode.position,
+                intensity: currentState.adherencePercentage
+            )
+
+        case .mealOffTrack:
+            coreNode.triggerEventFlash(strength: 0.18)
+
+            emitRing(
+                color: ColorPalette.dimGlowUI,
+                blendMode: .alpha,
+                baseScale: 0.75,
+                finalScale: 1.55,
+                duration: 0.65
+            )
+
+            particleManager?.emitMealOffTrackPuff(
+                at: coreNode.position,
+                intensity: 1 - currentState.adherencePercentage
+            )
+
+        case .apexIgnition:
+            coreNode.triggerEventFlash(strength: 1.0)
+            coreNode.triggerScalePop(strength: 0.14)
+
+            emitRing(
+                color: ColorPalette.radiantHaloUI,
+                blendMode: .add,
+                baseScale: 0.55,
+                finalScale: 2.15,
+                duration: 0.60
+            )
+            emitRing(
+                color: ColorPalette.radiantGlowUI,
+                blendMode: .add,
+                baseScale: 0.80,
+                finalScale: 2.55,
+                duration: 0.78
+            )
+
+            particleManager?.emitApexIgnition(
+                at: coreNode.position,
+                intensity: 1.0
+            )
+        }
+    }
+
+    private func emitRing(
+        color: UIColor,
+        blendMode: SKBlendMode,
+        baseScale: CGFloat,
+        finalScale: CGFloat,
+        duration: TimeInterval
+    ) {
+        guard let coreNode else { return }
+
+        let texture = CoreTextureGenerator.shared.generateRingTexture(size: CGSize(width: 256, height: 256))
+        let ring = SKSpriteNode(texture: texture)
+        ring.position = .zero
+        ring.size = CGSize(width: coreNode.baseDiameter * 1.15, height: coreNode.baseDiameter * 1.15)
+        ring.blendMode = blendMode
+        ring.color = color
+        ring.colorBlendFactor = 1.0
+        ring.alpha = 0
+        ring.setScale(baseScale)
+        ring.zPosition = 60
+
+        coreNode.addChild(ring)
+
+        let popIn = SKAction.group([
+            .fadeAlpha(to: blendMode == .add ? 0.95 : 0.55, duration: 0.03),
+            .scale(to: baseScale * 0.98, duration: 0.03)
+        ])
+
+        let expand = SKAction.group([
+            .scale(to: finalScale, duration: duration),
+            .fadeOut(withDuration: duration)
+        ])
+        expand.timingMode = .easeOut
+
+        ring.run(.sequence([
+            popIn,
+            expand,
+            .removeFromParent()
+        ]))
     }
 
     /// Calculates transition duration based on direction

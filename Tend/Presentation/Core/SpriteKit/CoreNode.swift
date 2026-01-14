@@ -41,8 +41,20 @@ final class CoreNode: SKNode {
     /// Bright central point - the furnace within
     private let innerCore: SKSpriteNode
 
+    /// Slow convection/granulation near the inner core
+    private let innerConvectionA: SKSpriteNode
+    private let innerConvectionB: SKSpriteNode
+
     /// Light channels crossing the surface
     private let striationOverlay: SKSpriteNode
+
+    /// Traveling striation highlight (masked sweep band)
+    private let striationEnergyCrop: SKCropNode
+    private let striationEnergyBand: SKSpriteNode
+    private let striationEnergyMask: SKSpriteNode
+
+    /// Apex inhale flare (one-shot at inhale peak when eligible)
+    private let apexFlare: SKSpriteNode
 
     /// Container for blur/glow post-processing effects
     private let effectNode: SKEffectNode
@@ -58,6 +70,27 @@ final class CoreNode: SKNode {
     private var tapFlashStartTime: TimeInterval?
     private var tapFlashStrength: CGFloat = 0
 
+    private var eventFlashStartTime: TimeInterval?
+    private var eventFlashStrength: CGFloat = 0
+    private var eventFlashDuration: TimeInterval = 0.28
+
+    private var scalePopStartTime: TimeInterval?
+    private var scalePopStrength: CGFloat = 0
+    private var scalePopDuration: TimeInterval = 0.22
+
+    private var striationPulseStartTime: TimeInterval?
+    private var striationPulseStrength: CGFloat = 0
+
+    private var apexBoost: CGFloat = 0
+
+    private var apexFlareStartTime: TimeInterval?
+    private var apexFlareStrength: CGFloat = 0
+    private var apexFlareDuration: TimeInterval = 0.32
+    private var apexFlareFadeOutDuration: TimeInterval = 0.12
+    private var apexFlareLastAlpha: CGFloat = 0
+
+    private let energySeed: CGFloat = CGFloat.random(in: 0...1000)
+
     // MARK: - Initialization
 
     /// Creates a new CoreNode with the specified base diameter
@@ -72,6 +105,10 @@ final class CoreNode: SKNode {
         let surfaceSize = CGSize(width: baseDiameter, height: baseDiameter)
         let innerSize = CGSize(width: baseDiameter * 0.5, height: baseDiameter * 0.5)
         let striationSize = CGSize(width: baseDiameter * 0.9, height: baseDiameter * 0.9)
+        let convectionASize = CGSize(width: baseDiameter * 0.78, height: baseDiameter * 0.78)
+        let convectionBSize = CGSize(width: baseDiameter * 0.66, height: baseDiameter * 0.66)
+        let energyBandSize = CGSize(width: baseDiameter * 1.8, height: baseDiameter * 1.8)
+        let flareSize = CGSize(width: baseDiameter * 1.85, height: baseDiameter * 1.85)
 
         // Background glow - largest, softest layer
         backgroundGlow = SKSpriteNode(texture: generator.generateGlowTexture(size: glowSize, falloff: 0.3))
@@ -107,12 +144,61 @@ final class CoreNode: SKNode {
         innerCore.alpha = 1.0
         innerCore.zPosition = 4
 
+        // Convection / granulation layers (idle life)
+        innerConvectionA = SKSpriteNode(
+            texture: generator.generateGranulationTexture(
+                size: convectionASize,
+                seed: Int(baseDiameter * 31)
+            )
+        )
+        innerConvectionA.size = convectionASize
+        innerConvectionA.blendMode = .add
+        innerConvectionA.alpha = 0.18
+        innerConvectionA.zPosition = 3
+
+        innerConvectionB = SKSpriteNode(
+            texture: generator.generateGranulationTexture(
+                size: convectionBSize,
+                seed: Int(baseDiameter * 57)
+            )
+        )
+        innerConvectionB.size = convectionBSize
+        innerConvectionB.blendMode = .add
+        innerConvectionB.alpha = 0.14
+        innerConvectionB.zPosition = 4
+
         // Striation overlay - light channels
         striationOverlay = SKSpriteNode(texture: generator.generateStriationTexture(size: striationSize))
         striationOverlay.size = striationSize
         striationOverlay.blendMode = .add
         striationOverlay.alpha = 0.5
         striationOverlay.zPosition = 5
+
+        // Striation energy highlight (mask + moving sweep band)
+        striationEnergyMask = SKSpriteNode(texture: generator.generateStriationTexture(size: striationSize))
+        striationEnergyMask.size = striationSize
+        striationEnergyMask.alpha = 1.0
+
+        striationEnergyBand = SKSpriteNode(texture: generator.generateSweepBandTexture(size: energyBandSize))
+        striationEnergyBand.size = energyBandSize
+        striationEnergyBand.blendMode = .add
+        striationEnergyBand.alpha = 0.0
+
+        striationEnergyCrop = SKCropNode()
+        striationEnergyCrop.zPosition = 6
+
+        // Apex inhale flare (brief, breath-synced)
+        apexFlare = SKSpriteNode(
+            texture: generator.generateApexFlareTexture(
+                size: flareSize,
+                seed: Int(baseDiameter * 91)
+            )
+        )
+        apexFlare.size = flareSize
+        apexFlare.blendMode = .add
+        apexFlare.alpha = 0
+        apexFlare.zPosition = 2
+        apexFlare.isHidden = true
 
         super.init()
 
@@ -121,10 +207,17 @@ final class CoreNode: SKNode {
         // Build layer hierarchy
         visualRoot.addChild(backgroundGlow)
         visualRoot.addChild(effectNode)
+        visualRoot.addChild(apexFlare)
         effectNode.addChild(subsurfaceGlow)
+        effectNode.addChild(innerConvectionA)
+        effectNode.addChild(innerConvectionB)
         visualRoot.addChild(outerSurface)
         visualRoot.addChild(innerCore)
         visualRoot.addChild(striationOverlay)
+
+        striationEnergyCrop.maskNode = striationEnergyMask
+        striationEnergyCrop.addChild(striationEnergyBand)
+        visualRoot.addChild(striationEnergyCrop)
 
         // Set initial colors to neutral state
         applyColors(forAdherence: 0.5)
@@ -162,6 +255,11 @@ final class CoreNode: SKNode {
         innerCore.color = innerColor
         innerCore.colorBlendFactor = 1.0
 
+        innerConvectionA.color = innerColor
+        innerConvectionA.colorBlendFactor = 1.0
+        innerConvectionB.color = innerColor
+        innerConvectionB.colorBlendFactor = 1.0
+
         subsurfaceGlow.color = glowColor
         subsurfaceGlow.colorBlendFactor = 1.0
 
@@ -173,6 +271,12 @@ final class CoreNode: SKNode {
 
         striationOverlay.color = ColorPalette.sparkColor(adherence: adherence)
         striationOverlay.colorBlendFactor = 1.0
+
+        striationEnergyBand.color = ColorPalette.sparkColor(adherence: adherence)
+        striationEnergyBand.colorBlendFactor = 1.0
+
+        apexFlare.color = glowColor
+        apexFlare.colorBlendFactor = 1.0
     }
 
     /// Animates color transitions over duration
@@ -185,6 +289,9 @@ final class CoreNode: SKNode {
         // Animate inner core color
         innerCore.run(SKAction.colorize(with: innerColor, colorBlendFactor: 1.0, duration: duration))
 
+        innerConvectionA.run(SKAction.colorize(with: innerColor, colorBlendFactor: 1.0, duration: duration))
+        innerConvectionB.run(SKAction.colorize(with: innerColor, colorBlendFactor: 1.0, duration: duration))
+
         // Animate glow colors
         subsurfaceGlow.run(SKAction.colorize(with: glowColor, colorBlendFactor: 1.0, duration: duration))
         backgroundGlow.run(SKAction.colorize(with: glowColor, colorBlendFactor: 1.0, duration: duration))
@@ -194,6 +301,10 @@ final class CoreNode: SKNode {
 
         // Animate striation color
         striationOverlay.run(SKAction.colorize(with: striationColor, colorBlendFactor: 1.0, duration: duration))
+
+        striationEnergyBand.run(SKAction.colorize(with: striationColor, colorBlendFactor: 1.0, duration: duration))
+
+        apexFlare.run(SKAction.colorize(with: glowColor, colorBlendFactor: 1.0, duration: duration))
     }
 
     // MARK: - Glow Radius Animation
@@ -222,8 +333,22 @@ final class CoreNode: SKNode {
     /// Sets the scale of all layers (called by BreathingController)
     /// - Parameter scale: Scale factor (1.0 = normal, >1 = expanded, <1 = contracted)
     func setBreathScale(_ scale: CGFloat) {
+        let now = CACurrentMediaTime()
+        var pop: CGFloat = 0
+
+        if let start = scalePopStartTime {
+            let elapsed = now - start
+            if elapsed >= scalePopDuration {
+                scalePopStartTime = nil
+                scalePopStrength = 0
+            } else if elapsed >= 0 {
+                let t = CGFloat(elapsed / scalePopDuration).clamped(to: 0...1)
+                pop = scalePopStrength * (1 - easeInOutQuad(t))
+            }
+        }
+
         // Scale visuals only (physics body remains stable)
-        visualRoot.setScale(scale)
+        visualRoot.setScale(scale * (1 + pop))
     }
 
     /// Applies breath-driven brightness + subtle internal drift.
@@ -247,13 +372,37 @@ final class CoreNode: SKNode {
             }
         }
 
+        var eventFlash: CGFloat = 0
+        if let start = eventFlashStartTime {
+            let elapsed = time - start
+            if elapsed >= eventFlashDuration {
+                eventFlashStartTime = nil
+                eventFlashStrength = 0
+            } else if elapsed >= 0 {
+                let t = (1 - CGFloat(elapsed / eventFlashDuration)).clamped(to: 0...1)
+                eventFlash = eventFlashStrength * easeInOutQuad(t)
+            }
+        }
+
+        var striationPulse: CGFloat = 0
+        if let start = striationPulseStartTime {
+            let elapsed = time - start
+            if elapsed >= 0.18 {
+                striationPulseStartTime = nil
+                striationPulseStrength = 0
+            } else if elapsed >= 0 {
+                let t = (1 - CGFloat(elapsed / 0.18)).clamped(to: 0...1)
+                striationPulse = striationPulseStrength * easeInOutSine(t)
+            }
+        }
+
         // Baseline visibility by state (ensures the Core reads even when "cold")
         let baseInner = lerp(0.55, 1.0, currentAdherence)
         let baseSub = lerp(0.45, 0.9, currentAdherence)
         let baseStriation = lerp(0.18, 0.7, currentAdherence)
         let baseHalo = lerp(0.35, 0.85, currentAdherence)
 
-        let totalBoost = (b + tapFlash * 0.25).clamped(to: 0...0.4)
+        let totalBoost = (b + tapFlash * 0.25 + eventFlash * 0.35).clamped(to: 0...0.55)
 
         innerCore.alpha = (baseInner * (1 + totalBoost)).clamped(to: 0.25...1.0)
         subsurfaceGlow.alpha = (baseSub * (1 + totalBoost * 0.8)).clamped(to: 0.20...1.0)
@@ -265,6 +414,66 @@ final class CoreNode: SKNode {
         let dx = sin(time * 0.35 + driftSeed) * driftAmplitude
         let dy = cos(time * 0.27 + driftSeed * 1.7) * driftAmplitude
         innerCore.position = CGPoint(x: dx, y: dy)
+
+        // Convection (medium timescale life)
+        let convBase = lerp(0.05, 0.28, easeInOutQuad(currentAdherence)) * (1 + 0.12 * apexBoost)
+        let convBreath = (0.55 + 0.45 * i)
+        innerConvectionA.alpha = (convBase * convBreath + eventFlash * 0.10).clamped(to: 0...1)
+        innerConvectionB.alpha = (convBase * 0.85 * convBreath + eventFlash * 0.08).clamped(to: 0...1)
+
+        innerConvectionA.position = CGPoint(x: dx * 0.35, y: dy * 0.25)
+        innerConvectionB.position = CGPoint(x: -dx * 0.22, y: dy * 0.16)
+
+        innerConvectionA.zRotation = CGFloat(time * 0.10) + driftSeed * 0.002
+        innerConvectionB.zRotation = CGFloat(-time * 0.08) + driftSeed * 0.004
+
+        innerConvectionA.setScale(1 + 0.025 * sin(CGFloat(time) * 0.30 + energySeed))
+        innerConvectionB.setScale(1 + 0.030 * cos(CGFloat(time) * 0.27 + energySeed * 0.7))
+
+        // Striations: traveling energy wave + inhale pulse
+        let travelDistance = baseDiameterValue * 1.7
+        let travelSpeed: CGFloat = lerp(18, 62, easeInOutSine(currentAdherence))
+        let travelX = ((CGFloat(time) * travelSpeed + energySeed).truncatingRemainder(dividingBy: travelDistance)) - (travelDistance / 2)
+        let travelY = sin(CGFloat(time) * 0.55 + energySeed) * baseRadius * lerp(0.03, 0.18, currentAdherence)
+
+        striationEnergyBand.position = CGPoint(x: travelX, y: travelY)
+        striationEnergyBand.zRotation = sin(CGFloat(time) * 0.12 + energySeed) * 0.35
+
+        let energyBase = lerp(0.05, 0.42, easeInOutCubic(currentAdherence)) * (1 + 0.22 * apexBoost)
+        let pulseBoost = striationPulse * lerp(0.10, 0.30, currentAdherence)
+        let energyAlpha = (energyBase + pulseBoost + eventFlash * 0.12) * (0.72 + 0.28 * i)
+        striationEnergyBand.alpha = energyAlpha.clamped(to: 0...1)
+
+        // Apex inhale flare (one-shot at inhale peak while eligible)
+        if apexBoost > 0.001, let start = apexFlareStartTime {
+            let elapsed = time - start
+            let totalDuration = apexFlareDuration + apexFlareFadeOutDuration
+
+            if elapsed >= totalDuration {
+                apexFlareStartTime = nil
+                apexFlareStrength = 0
+                apexFlareLastAlpha = 0
+                apexFlare.alpha = 0
+                apexFlare.isHidden = true
+            } else if elapsed >= apexFlareDuration {
+                let t = (CGFloat(elapsed - apexFlareDuration) / CGFloat(apexFlareFadeOutDuration)).clamped(to: 0...1)
+                let alpha = (apexFlareLastAlpha * (1 - easeInOutQuad(t))).clamped(to: 0...1)
+                apexFlare.isHidden = alpha < 0.001
+                apexFlare.alpha = alpha
+            } else if elapsed >= 0 {
+                let t = (CGFloat(elapsed) / CGFloat(apexFlareDuration)).clamped(to: 0...1)
+                let envelope = sin(.pi * t)
+                let alpha = (envelope * apexFlareStrength * (0.18 + 0.62 * apexBoost)).clamped(to: 0...1)
+                apexFlareLastAlpha = alpha
+                apexFlare.isHidden = false
+                apexFlare.alpha = alpha
+                apexFlare.setScale(0.86 + 0.72 * easeInOutSine(t))
+                apexFlare.zRotation = sin(CGFloat(time) * 0.32 + energySeed) * 0.28
+            }
+        } else {
+            apexFlare.alpha = 0
+            apexFlare.isHidden = true
+        }
     }
 
     // MARK: - Physics Setup
@@ -292,6 +501,58 @@ final class CoreNode: SKNode {
     func flashOnTap(intensity: CGFloat) {
         tapFlashStartTime = CACurrentMediaTime()
         tapFlashStrength = intensity.clamped(to: 0...1)
+    }
+
+    func triggerEventFlash(strength: CGFloat, duration: TimeInterval = 0.28) {
+        eventFlashStartTime = CACurrentMediaTime()
+        eventFlashStrength = strength.clamped(to: 0...1)
+        eventFlashDuration = max(0.05, duration)
+    }
+
+    func triggerScalePop(strength: CGFloat, duration: TimeInterval = 0.22) {
+        scalePopStartTime = CACurrentMediaTime()
+        scalePopStrength = strength.clamped(to: 0...0.25)
+        scalePopDuration = max(0.05, duration)
+    }
+
+    func triggerStriationPulse(intensity: CGFloat) {
+        striationPulseStartTime = CACurrentMediaTime()
+        striationPulseStrength = intensity.clamped(to: 0...1)
+    }
+
+    func triggerApexInhaleFlare(intensity: CGFloat) {
+        guard apexBoost > 0.001 else { return }
+        apexFlareStartTime = CACurrentMediaTime()
+        apexFlareStrength = intensity.clamped(to: 0...1)
+        apexFlareLastAlpha = 0
+    }
+
+    func setApexEligible(_ eligible: Bool, animated: Bool = true) {
+        let target: CGFloat = eligible ? 1 : 0
+
+        guard animated else {
+            apexBoost = target
+            if target < 0.001 {
+                apexFlareStartTime = nil
+                apexFlareStrength = 0
+                apexFlareLastAlpha = 0
+                apexFlare.alpha = 0
+                apexFlare.isHidden = true
+            }
+            return
+        }
+
+        let start = apexBoost
+        let duration: TimeInterval = 0.45
+
+        run(
+            .customAction(withDuration: duration) { [weak self] _, elapsed in
+                guard let self else { return }
+                let t = (CGFloat(elapsed) / CGFloat(duration)).clamped(to: 0...1)
+                self.apexBoost = lerp(start, target, easeInOutQuad(t))
+            },
+            withKey: "apexBoost"
+        )
     }
 }
 
