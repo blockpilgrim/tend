@@ -18,10 +18,7 @@ struct MealLoggingFlow: View {
     var body: some View {
         Group {
             if let viewModel = viewModel {
-                NavigationStack {
-                    flowContent(viewModel: viewModel)
-                        .navigationBarHidden(true)
-                }
+                MealLoggingFlowContent(viewModel: viewModel, dismiss: dismiss)
             } else {
                 // Loading state
                 ZStack {
@@ -38,31 +35,43 @@ struct MealLoggingFlow: View {
             }
         }
     }
+}
 
-    @ViewBuilder
-    private func flowContent(viewModel: MealLoggingViewModel) -> some View {
-        switch viewModel.currentStep {
-        case .capture:
-            CaptureView(
-                viewModel: viewModel,
-                onDismiss: { dismiss() }
-            )
-            .transition(.opacity)
+/// Internal view that properly tracks @Observable dependencies via @Bindable.
+/// This separation is necessary because observation tracking doesn't work correctly
+/// when an @Observable is passed through a method parameter to a @ViewBuilder.
+private struct MealLoggingFlowContent: View {
+    @Bindable var viewModel: MealLoggingViewModel
+    let dismiss: DismissAction
 
-        case .textEntry:
-            TextEntryView(
-                viewModel: viewModel,
-                onDismiss: { dismiss() }
-            )
-            .transition(.move(edge: .trailing))
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch viewModel.currentStep {
+                case .capture:
+                    CaptureView(
+                        viewModel: viewModel,
+                        onDismiss: { dismiss() }
+                    )
+                    .transition(.opacity)
 
-        case .confirmation:
-            ConfirmationView(
-                viewModel: viewModel,
-                onComplete: { dismiss() },
-                onDismiss: { dismiss() }
-            )
-            .transition(.move(edge: .trailing))
+                case .textEntry:
+                    TextEntryView(
+                        viewModel: viewModel,
+                        onDismiss: { dismiss() }
+                    )
+                    .transition(.move(edge: .trailing))
+
+                case .confirmation:
+                    ConfirmationView(
+                        viewModel: viewModel,
+                        onComplete: { dismiss() },
+                        onDismiss: { dismiss() }
+                    )
+                    .transition(.move(edge: .trailing))
+                }
+            }
+            .navigationBarHidden(true)
         }
     }
 }

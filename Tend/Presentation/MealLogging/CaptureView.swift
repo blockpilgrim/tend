@@ -26,32 +26,44 @@ struct CaptureView: View {
             VStack(spacing: 0) {
                 // Camera viewfinder area
                 ZStack {
-                    if cameraService.isAuthorized {
+                    if cameraService.isAuthorized && cameraService.isCameraAvailable {
                         CameraPreviewView(cameraService: cameraService)
                             .ignoresSafeArea(edges: .top)
                     } else {
-                        // Placeholder when camera not authorized
+                        // Placeholder when camera not authorized or unavailable
                         VStack(spacing: 16) {
                             Image(systemName: "camera.fill")
                                 .font(.system(size: 48))
                                 .foregroundStyle(Color("TextSecondary"))
 
-                            Text("Camera access required")
+                            if cameraService.isCameraAvailable {
+                                Text("Camera access required")
+                                    .font(.headline)
+                                    .foregroundStyle(Color("TextPrimary"))
+
+                                Text("Enable camera access in Settings to capture meal photos.")
+                                    .font(.body)
+                                    .foregroundStyle(Color("TextSecondary"))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 32)
+
+                                Button("Open Settings") {
+                                    openSettings()
+                                }
                                 .font(.headline)
-                                .foregroundStyle(Color("TextPrimary"))
+                                .foregroundStyle(Color("AccentPrimary"))
+                                .padding(.top, 8)
+                            } else {
+                                Text("Camera not available")
+                                    .font(.headline)
+                                    .foregroundStyle(Color("TextPrimary"))
 
-                            Text("Enable camera access in Settings to capture meal photos.")
-                                .font(.body)
-                                .foregroundStyle(Color("TextSecondary"))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
-
-                            Button("Open Settings") {
-                                openSettings()
+                                Text("Use the text option below to describe your meal.")
+                                    .font(.body)
+                                    .foregroundStyle(Color("TextSecondary"))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 32)
                             }
-                            .font(.headline)
-                            .foregroundStyle(Color("AccentPrimary"))
-                            .padding(.top, 8)
                         }
                     }
 
@@ -83,8 +95,8 @@ struct CaptureView: View {
                                 .frame(width: 60, height: 60)
                         }
                     }
-                    .disabled(!cameraService.isAuthorized || cameraService.isCapturing)
-                    .opacity(cameraService.isAuthorized ? 1 : 0.5)
+                    .disabled(!cameraService.isAuthorized || !cameraService.isCameraAvailable || cameraService.isCapturing)
+                    .opacity(cameraService.isAuthorized && cameraService.isCameraAvailable ? 1 : 0.5)
 
                     // Text entry option
                     Button(action: { viewModel.switchToTextEntry() }) {
@@ -169,11 +181,6 @@ struct TextEntryView: View {
         ZStack {
             Color("BackgroundPrimary")
                 .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    isTextFieldFocused = false
-                }
-                .allowsHitTesting(isTextFieldFocused)
 
             VStack(spacing: 24) {
                 // Header area with back and close buttons

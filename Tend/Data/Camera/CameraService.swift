@@ -43,6 +43,13 @@ final class CameraService: NSObject, ObservableObject {
 
     /// Check and request camera authorization
     func checkAuthorization() async {
+        // First check if camera hardware is available (not available on simulator)
+        guard isCameraAvailable else {
+            isAuthorized = false
+            error = .cameraUnavailable
+            return
+        }
+
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             isAuthorized = true
