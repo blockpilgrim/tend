@@ -15,6 +15,22 @@ struct SpriteKitContainer: UIViewRepresentable {
     /// The current Core state to display
     let coreState: CoreState
 
+    /// Whether the apex crown should be shown
+    let isApexEligible: Bool
+
+    /// One-shot VFX event (played once when `id` changes)
+    let vfxEvent: CoreVFXEvent?
+
+    init(
+        coreState: CoreState,
+        isApexEligible: Bool = false,
+        vfxEvent: CoreVFXEvent? = nil
+    ) {
+        self.coreState = coreState
+        self.isApexEligible = isApexEligible
+        self.vfxEvent = vfxEvent
+    }
+
     // MARK: - UIViewRepresentable
 
     func makeUIView(context: Context) -> SKView {
@@ -44,6 +60,7 @@ struct SpriteKitContainer: UIViewRepresentable {
 
         // Apply initial state
         scene.updateState(coreState, animated: false)
+        scene.setApexEligible(isApexEligible, animated: false)
 
         return view
     }
@@ -52,6 +69,12 @@ struct SpriteKitContainer: UIViewRepresentable {
         // Forward state changes to scene
         if let scene = context.coordinator.scene {
             scene.updateState(coreState, animated: true)
+            scene.setApexEligible(isApexEligible, animated: true)
+
+            if let event = vfxEvent, context.coordinator.lastVFXEventID != event.id {
+                context.coordinator.lastVFXEventID = event.id
+                scene.handleVFXEvent(event)
+            }
         }
     }
 
@@ -64,6 +87,7 @@ struct SpriteKitContainer: UIViewRepresentable {
     /// Coordinator to maintain scene reference across updates
     class Coordinator {
         var scene: RadiantCoreScene?
+        var lastVFXEventID: UUID?
     }
 }
 

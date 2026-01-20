@@ -26,7 +26,11 @@ struct CoreView: View {
                 Spacer()
 
                 // Radiant Core SpriteKit scene
-                SpriteKitContainer(coreState: appState.coreState)
+                SpriteKitContainer(
+                    coreState: appState.coreState,
+                    isApexEligible: appState.isApexEligible,
+                    vfxEvent: appState.coreVFXEvent
+                )
                     .frame(maxWidth: .infinity)
                     .frame(height: UIScreen.main.bounds.height * 0.6)
 

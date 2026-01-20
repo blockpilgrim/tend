@@ -23,6 +23,15 @@ final class AppState {
     private(set) var coreState: CoreState = .neutral
     private(set) var adherenceStats: AdherenceStats = .empty
 
+    /// One-shot core VFX events (meal logging reward, apex ignition).
+    /// This is intentionally separate from steady state interpolation.
+    private(set) var coreVFXEvent: CoreVFXEvent?
+
+    /// Apex eligibility (perfect adherence + more than 1 meal logged today).
+    var isApexEligible: Bool {
+        coreState.adherencePercentage >= 0.999 && adherenceStats.todayCount.total > 1
+    }
+
     // MARK: - Services
     private var mealRepository: MealRepositoryProtocol?
     private let adherenceCalculator: AdherenceCalculatorProtocol = AdherenceCalculator()
@@ -64,8 +73,17 @@ final class AppState {
             throw AppStateError.persistenceNotReady
         }
 
+        let wasApexEligible = isApexEligible
+
         try await repository.save(meal)
         await refreshCoreState()
+
+        // One-shot VFX event for the Core (played by SpriteKit scene).
+        if isApexEligible && !wasApexEligible {
+            coreVFXEvent = CoreVFXEvent(kind: .apexIgnition)
+        } else {
+            coreVFXEvent = CoreVFXEvent(kind: meal.isOnTrack ? .mealOnTrack : .mealOffTrack)
+        }
     }
 
     func completeOnboarding(with goal: DietaryGoal, context: ModelContext) {

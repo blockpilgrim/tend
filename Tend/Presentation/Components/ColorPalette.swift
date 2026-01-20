@@ -44,6 +44,7 @@ enum ColorPalette {
     static let radiantInnerCoreUI = UIColor(named: "RadiantInnerCore")!
     static let radiantGlowUI = UIColor(named: "RadiantGlow")!
     static let radiantSurfaceUI = UIColor(named: "RadiantSurface")!
+    static let radiantHaloUI = UIColor(named: "RadiantHalo")!
 
     static let dimInnerCoreUI = UIColor(named: "DimInnerCore")!
     static let dimGlowUI = UIColor(named: "DimGlow")!
